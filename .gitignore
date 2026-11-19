@@ -1,0 +1,20 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+Local.props
+
+# Runtime and game libraries stay in the game installation.
+BepInEx/
+dotnet/
+gogh_Data/
+*.dll
+*.exe
+
+# Local environment secrets; keep only an intentionally sanitized example.
+.env
+.env.*
+!.env.example

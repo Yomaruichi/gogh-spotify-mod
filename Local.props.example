@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Copy this file to Local.props and set the game installation path, including the final slash. -->
+    <GameRoot>D:\SteamLibrary\steamapps\common\gogh Focus with Your Avatar\</GameRoot>
+  </PropertyGroup>
+</Project>

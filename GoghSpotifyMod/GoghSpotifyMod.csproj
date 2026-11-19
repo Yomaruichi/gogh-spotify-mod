@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\Local.props" Condition="Exists('..\Local.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RestoreSources>$(MSBuildThisFileDirectory)</RestoreSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx.Core" HintPath="$(GameRoot)BepInEx\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="BepInEx.Unity.IL2CPP" HintPath="$(GameRoot)BepInEx\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="Il2CppInterop.Runtime" HintPath="$(GameRoot)BepInEx\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="Il2Cppmscorlib" HintPath="$(GameRoot)BepInEx\interop\Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(GameRoot)BepInEx\interop\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(GameRoot)BepInEx\interop\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(GameRoot)BepInEx\interop\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(GameRoot)BepInEx\interop\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(GameRoot)BepInEx\interop\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <Compile Remove="SpotifyArtworkReader.cs" />
+    <None Include="SpotifySessionBridge.ps1" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CheckGameRoot" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(GameRoot)BepInEx\core\BepInEx.Unity.IL2CPP.dll')" Text="Set GameRoot in Local.props to your gogh installation path, including the final slash." />
+  </Target>
+</Project>
