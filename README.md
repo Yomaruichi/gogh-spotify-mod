@@ -1,83 +1,228 @@
-# gogh Spotify integration mod
+# gogh Spotify Mod
 
-A Windows mod for gogh built with BepInEx 6 IL2CPP. Version 0.3.0 adds a compact Spotify player with local album art, track and artist, playback state, previous/play-pause/next controls, and a draggable saved position.
+An unofficial Windows mod for **gogh: Focus with Your Avatar**, built with BepInEx 6 IL2CPP.
 
-The player starts near the bottom-right, above gogh's bottom controls. Its rounded dark surface follows the game's controls. Drag the top Spotify/status strip to move it; the position is saved. F9 hides or shows it. Spotify handles audio in its own app. This implementation uses no Spotify developer account, OAuth tokens, web API calls, or extra NuGet packages.
+Version **0.5.0** adds a local Spotify player with album art, playback controls, appearance settings, and a progress bar. Spotify continues handling audio in its desktop app. The mod does not require a Spotify developer account, API credentials, or OAuth sign-in.
 
-## Repository layout
+## Features
 
-- GoghSpotifyMod/: integration plugin and Windows media-session helper.
-- GoghStartupTest/: the earlier F8 diagnostic plugin.
-- build.ps1: build the integration plugin and optionally deploy it.
-- tests/Test-SpotifyBridge.ps1: real media query, failure-path, and helper lifetime checks.
+- Song title, artist, album art, and playing/paused state.
+- Previous, play/pause, and next controls.
+- A progress bar with elapsed and total time.
+- A draggable player with a saved position.
+- Live customization for player size, background opacity, and text size.
+- A position lock that prevents dragging while leaving playback buttons usable.
+- **F9** to hide or show the player.
 
-All mod source, build scripts, setup instructions, and project documentation live here. Game libraries, installed plugin copies, and runtime logs stay in the game installation.
+The player starts near the bottom-right, above gogh's bottom controls. Existing saved positions are preserved when updating.
+
+## Multiplayer status
+
+**Multiplayer use has not been confirmed as permitted or ban-safe.** This project has not obtained developer confirmation for using its BepInEx-based player in multiplayer rooms. Use in solo is recommended until that is clarified.
+
+The plugin adds a local overlay and controls the local Spotify session. It does not implement room synchronization, transmit songs to other participants, or modify multiplayer messages. That limited scope does not establish official permission.
+
+**F9 only hides the player. It does not unload the plugin or BepInEx.** Disabling the console window also does not disable the mod.
 
 ## Requirements
 
+To run:
+
 - Windows 10 version 1809 or later, or Windows 11.
-- .NET 6 SDK and Windows 10/11 SDK for building. The SDK is used to compile a small Framework artwork adapter; runtime users do not need the SDK.
-- Spotify desktop app exposing a Windows media session.
-- BepInEx 6 Unity IL2CPP installed in gogh, with interop generation completed.
+- gogh for Windows x64.
+- BepInEx 6 **Unity IL2CPP, Windows x64**, with interop generation completed.
+- Spotify desktop exposing a Windows media session.
+- Windows PowerShell 5.1, included with Windows.
 
-The helper runs in Windows PowerShell 5.1 included with Windows. A separate helper avoids loading WinRT adapters into Unity's runtime. It polls metadata every two seconds, handles incoming controls at 100 ms intervals between media calls, checks only sessions whose application identifier contains Spotify, and exits when gogh closes. Commands travel through the helper's redirected stdin pipe and are limited to previous, toggle, and next. Each is attempted once; Spotify acceptance or rejection is logged. Its stdout carries UTF-8 JSON to the plugin; stderr carries lifecycle and failure diagnostics.
+To build:
 
-## Build and deploy
+- .NET 6 SDK.
+- Windows 10/11 SDK, used to compile the artwork adapter.
+- The game's local BepInEx and generated interop libraries.
 
-Copy Local.props.example to Local.props and set GameRoot to the game installation folder, including its final slash. The local settings file is ignored by Git.
+The Windows SDK is a build-time requirement; it is not needed to run a built copy of the mod. No extra NuGet packages are used.
 
-From this repository root:
+## Build and install
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+1. Install the correct BepInEx IL2CPP build beside `gogh.exe` and launch the game once to generate its interop libraries.
+2. Copy `Local.props.example` to `Local.props`.
+3. Set `GameRoot` to your game installation directory, including the final slash.
+4. Close gogh before deploying.
 
-To build and install, close gogh first:
+Build from the repository root:
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Deploy
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+```
 
-This installs GoghSpotifyMod.dll, SpotifySessionBridge.ps1, and SpotifyArtworkReader.dll in BepInEx/plugins/GoghSpotifyMod/. Deployment verifies all three file hashes. The commands use a process-only PowerShell execution-policy override because the local signing policy blocks unsigned scripts; they do not change machine settings. The F8 diagnostic plugin can remain installed.
+Build and install into the configured game directory:
 
-## Try it
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Deploy
+```
+
+Deployment copies and verifies these three files in `BepInEx/plugins/GoghSpotifyMod/`:
+
+```text
+GoghSpotifyMod.dll
+SpotifySessionBridge.ps1
+SpotifyArtworkReader.dll
+```
+
+The PowerShell policy override applies only to that process; it does not change machine settings.
+
+To update an existing installation, close gogh and deploy the new build over the previous plugin files. Your game-side configuration remains in place.
+
+## Using the player
 
 1. Open Spotify desktop and start a song.
 2. Launch gogh normally through Steam.
-3. Pause, resume, or change the song in Spotify.
-4. Inspect BepInEx/LogOutput.log for Spotify.NowPlaying changed messages.
+3. Use the player's previous, play/pause, and next buttons.
+4. Drag the top Spotify/status strip to move it.
+5. Click **Edit** to customize its appearance or lock its position.
+6. Press **F9** to hide or show it.
 
-Track information is written to this local log. If Spotify has no media session, the plugin logs that it is waiting. Read failures produce retry messages; helper startup failures include safe error codes. Album art is read from the local media session and cached for the current track, with a maximum encoded image size of 1 MiB. Missing art gets a neutral placeholder. Playback buttons are disabled when the session or the corresponding capability is unavailable.
+Playback buttons are disabled when Spotify has no session or does not expose the corresponding capability.
 
-To remove the integration, close gogh and remove only its BepInEx/plugins/GoghSpotifyMod directory.
+The progress bar shows elapsed and total time. It advances between samples while playing, freezes when paused, and stops at the reported duration. Long recordings use hours when needed. Missing or stale timing shows `--:--` and an empty bar. **Seeking by clicking the bar is not implemented.**
 
-## Verify the local bridge
+Missing album art uses a neutral placeholder. The helper caches artwork for the current track and limits each image to 1 MiB.
 
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-SpotifyBridge.ps1
+## Appearance settings
 
-The checks read current media data without changing playback. They cover a valid ready/waiting snapshot, visible failure for an invalid parent process, helper shutdown after its parent exits, and rejection of an invalid playback command. Ready snapshots also validate Boolean capabilities and bounded artwork data.
+Changes made through **Edit** apply live and save automatically.
 
-For a standalone snapshot:
+| Setting | Range | Default |
+| --- | --- | --- |
+| Player size | 75–150% | 100% |
+| Background opacity | 35–100% | 95% |
+| Text size | 85–125% | 100% |
+| Position lock | Locked / Unlocked | Unlocked |
 
-    & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\GoghSpotifyMod\SpotifySessionBridge.ps1 -Once
+**Reset appearance** restores these defaults without changing the saved position. Background opacity affects the player's background; text and playback controls remain readable. The appearance editor retains its own readable background.
 
-## Compatibility evidence
+Settings are stored in the game installation:
 
-On November 19, 2026:
+```text
+BepInEx/config/jd.gogh.spotify.cfg
+```
 
-- BepInEx 6.0.0-be.793 completed startup on the installed gogh build, Unity 6000.3.27f2 and metadata v39.
-- The default Unity library URL returned 404. Configuring the game's BepInEx/config/BepInEx.cfg with UnityBaseLibrariesSource = https://unity.bepinex.dev/libraries/6000.3.26.zip allowed generation of 193 interop DLLs. Compatibility of this adjacent-version workaround is established only for the tested paths.
-- The F8 diagnostic plugin loaded, passed more than 79,000 Unity callbacks, and recorded two F8 passes. The Class::Init fallback warning remains.
-- The Windows helper read Spotify metadata containing Japanese text and a paused playback state.
-- The integration compiled with zero warnings and errors and was deployed with matching source/destination hashes. Three bridge checks passed: real snapshot, invalid-parent failure, and parent-exit shutdown. Plugin JSON deserialization preserved a Japanese title. In-game load and track-change logging still need verification after deployment.
+The `[Panel]` section contains:
+
+```ini
+Visible = true
+RightMargin = 24
+BottomMargin = 88
+Scale = 1
+BackgroundOpacity = 0.95
+TextScale = 1
+PositionLocked = false
+```
+
+Margins use a 1280×720 reference canvas. The player is 336×168 reference pixels before scaling. Dragging updates the margins, and viewport bounds keep the player on-screen.
+
+## Logs and troubleshooting
+
+Logs remain in the game directory:
+
+```text
+BepInEx/LogOutput.log
+```
+
+Useful messages include `Spotify.Panel created`, `Spotify.NowPlaying changed`, `Spotify.Control accepted`, and `Spotify.Appearance changed`.
+
+Track information is written to this local log. Read failures and rejected commands are also logged. Logs are excluded from this repository.
+
+To disable the extra BepInEx console window, edit `BepInEx/config/BepInEx.cfg` while gogh is closed:
+
+```ini
+[Logging.Console]
+Enabled = false
+```
+
+Keep `[Logging.Disk] Enabled = true` if you want to retain file logs for troubleshooting. Restart gogh after changing BepInEx's console setting.
+
+If the player is missing, check that `Visible` is enabled, press F9 while the game is focused, and inspect the log for startup or panel errors.
+
+## Verification
+
+Check the real Windows media bridge without changing playback:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-SpotifyBridge.ps1
+```
+
+These checks cover valid media snapshots, capability and timeline fields, bounded artwork data, visible failure for an invalid parent, rejection of an unknown command, and helper shutdown after its parent exits.
+
+Check timeline calculations and formatting:
+
+```powershell
+dotnet run --project .\tests\TimelineTests\TimelineTests.csproj -c Release
+```
+
+The timeline checks cover playing and paused states, playback rate, track limits, invalid values, new-track samples, and minute/hour formatting.
+
+For a standalone metadata snapshot:
+
+```powershell
+& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File .\GoghSpotifyMod\SpotifySessionBridge.ps1 -Once
+```
+
+The standalone snapshot includes track metadata and encoded artwork; avoid posting its raw output publicly.
+
+### Tested status
+
+- BepInEx 6.0.0-be.793 initialized on the tested gogh installation using Unity 6000.3.27f2 and IL2CPP metadata v39.
+- The original F8 diagnostic plugin loaded and ran more than 79,000 Unity callbacks.
+- The rounded player, Japanese track text, album art, all three playback controls, and saved drag positions were verified in-game for version 0.3.0.
+- Version 0.5.0 built with zero warnings/errors and deployed successfully on November 22, 2026.
+- All 13 timeline checks and four bridge checks passed, including a real Spotify timeline.
+- The latest appearance editor and progress-row rendering still need a completed in-game verification pass.
+- Multiplayer approval and ban safety remain unconfirmed.
+
+### Unity library workaround
+
+On the tested installation, BepInEx's default download for Unity 6000.3.27 returned 404. The following setting in the game's `BepInEx/config/BepInEx.cfg` allowed interop generation using the previous patch's libraries:
+
+```ini
+[IL2CPP]
+UnityBaseLibrariesSource = https://unity.bepinex.dev/libraries/6000.3.26.zip
+```
+
+This adjacent-version workaround has only been exercised on the tested paths; it is not a general compatibility guarantee. A `Class::Init` signature fallback warning remains in the tested runtime.
+
+## How it works
+
+A hidden Windows PowerShell helper reads Spotify's local Windows media session. The plugin receives UTF-8 JSON snapshots through stdout and sends only the whitelisted `previous`, `toggle`, and `next` commands through stdin.
+
+Metadata is polled every two seconds. Between media calls, incoming commands are checked at 100 ms intervals. Each playback action is attempted once to avoid duplicate skips. The helper exits when its parent game process closes.
+
+Windows supplies the playback position, duration, update timestamp, and rate. The helper normalizes the timeline, and Unity advances it between samples using a monotonic clock. Unity UI changes stay on the game thread.
+
+## Repository layout
+
+- `GoghSpotifyMod/` — main plugin, native player UI, appearance editor, timeline calculations, media helper, and artwork adapter source.
+- `GoghStartupTest/` — optional F8 diagnostic plugin used during initial compatibility checks.
+- `tests/Test-SpotifyBridge.ps1` — Windows media bridge integration checks.
+- `tests/TimelineTests/` — standalone timeline calculation checks.
+- `build.ps1` — build and optional deployment.
+- `Local.props.example` — template for the local game installation path.
+
+All source, build scripts, and project documentation live here. Game files, downloaded libraries, installed plugin copies, and runtime logs remain in the game installation.
+
+Do not commit game files, runtime libraries, generated interop assemblies, build output, logs, local settings, or credentials. The ignore rules cover those artifacts and local `.env` files.
+
+## Removing the mod
+
+Close gogh and remove only `BepInEx/plugins/GoghSpotifyMod/` to remove this integration. The separate `GoghStartupTest` diagnostic plugin, if installed, can be removed independently.
+
+Removing this plugin does not remove BepInEx itself.
 
 ## References
 
-- [Windows media-session manager](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmanager)
-- [Media properties](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmediaproperties)
 - [BepInEx IL2CPP installation](https://docs.bepinex.dev/master/articles/user_guide/installation/unity_il2cpp.html)
-
-Do not commit game files, runtime libraries, generated interop DLLs, local logs, or build output.
-
-
-## Player configuration
-
-The generated game-side BepInEx/config/jd.gogh.spotify.cfg stores Visible, RightMargin, and BottomMargin under Panel. Margins use the 1280x720 reference canvas. Dragging updates the two margins and viewport bounds keep the player on-screen. The default lower-right position is RightMargin=24 and BottomMargin=88. Text uses loaded game fonts, including the existing Japanese fallback setup.
-
-The native canvas intercepts pointer input over the player so its buttons and drag handle work. The rest of the screen keeps normal game interaction. The old F8 diagnostic plugin remains independent.
+- [Windows media-session manager](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmanager)
+- [Windows media properties](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessionmediaproperties)
+- [Windows playback timeline](https://learn.microsoft.com/en-us/uwp/api/windows.media.control.globalsystemmediatransportcontrolssessiontimelineproperties)
+- [gogh developer newsletter discussing mods](https://gogh.gg/news/zh-sc/20260310)
+- [gogh multiplayer help](https://gogh.zendesk.com/hc/ja/articles/55524515648025-Multiplayer)

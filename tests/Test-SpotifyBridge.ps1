@@ -66,9 +66,21 @@ try {
     }
 
     if ($snapshot.Status -eq 'Ready') {
-        foreach ($propertyName in 'CanPrevious', 'CanToggle', 'CanNext') {
+        foreach ($propertyName in 'CanPrevious', 'CanToggle', 'CanNext', 'TimelineAvailable') {
             if ($snapshot.$propertyName -isnot [bool]) {
                 throw "Expected a Boolean capability for $propertyName."
+            }
+        }
+
+        if ($snapshot.TimelineAvailable) {
+            $position = [double] $snapshot.PositionSeconds
+
+            $duration = [double] $snapshot.DurationSeconds
+
+            if ([double]::IsNaN($position) -or [double]::IsInfinity($position) -or
+                [double]::IsNaN($duration) -or [double]::IsInfinity($duration) -or
+                $duration -le 0 -or $position -lt 0 -or $position -gt $duration) {
+                throw 'A valid timeline must contain finite position and duration within track bounds.'
             }
         }
 

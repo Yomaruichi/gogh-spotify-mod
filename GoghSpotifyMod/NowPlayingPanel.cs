@@ -20,7 +20,7 @@ using UnityEngine.UI;
 
 namespace GoghSpotifyMod;
 
-public sealed class NowPlayingPanel : MonoBehaviour
+public sealed partial class NowPlayingPanel : MonoBehaviour
 {
     internal static ManualLogSource PanelLog;
 
@@ -84,6 +84,8 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
     private float nextCommandAt;
 
+    private bool dragging;
+
     public NowPlayingPanel(IntPtr pointer) : base(pointer)
     {
     }
@@ -99,7 +101,11 @@ public sealed class NowPlayingPanel : MonoBehaviour
         string artwork = "",
         bool canPrevious = false,
         bool canToggle = false,
-        bool canNext = false
+        bool canNext = false,
+        bool timelineAvailable = false,
+        double positionSeconds = 0,
+        double durationSeconds = 0,
+        double playbackRate = 1
     )
     {
         // Only managed data crosses the reader thread; Unity work stays in Update.
@@ -112,7 +118,11 @@ public sealed class NowPlayingPanel : MonoBehaviour
             Artwork = artwork ?? "",
             CanPrevious = canPrevious,
             CanToggle = canToggle,
-            CanNext = canNext
+            CanNext = canNext,
+            TimelineAvailable = timelineAvailable,
+            PositionSeconds = positionSeconds,
+            DurationSeconds = durationSeconds,
+            PlaybackRate = playbackRate
         });
     }
 
@@ -154,7 +164,11 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
             canvasObject.SetActive(VisibleSetting.Value);
 
+            ApplyAppearance();
+
             ClampPanel();
+
+            UpdateAppearanceMenu();
 
             if (Time.unscaledTime < nextRefreshAt)
             {
@@ -230,7 +244,7 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         pauseSprite = CreateShape("pause");
 
-        panel = CreateRect("SpotifyPlayer", canvasObject.transform, 336f, 136f, 0f, 0f);
+        panel = CreateRect("SpotifyPlayer", canvasObject.transform, PlayerWidth, PlayerHeight, 0f, 0f);
 
         panel.anchorMin = new Vector2(1f, 0f);
 
@@ -241,6 +255,8 @@ public sealed class NowPlayingPanel : MonoBehaviour
         panel.anchoredPosition = new Vector2(-RightMargin.Value, BottomMargin.Value);
 
         Image background = panel.gameObject.AddComponent<Image>();
+
+        panelBackground = background;
 
         background.sprite = roundedSprite;
 
@@ -259,7 +275,7 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         AddDragEvents(handle.gameObject);
 
-        CreateLabel("Spotify", handle, "Spotify", 12f, 0f, 4f, 130f, 22f, new Color(0.76f, 0.82f, 0.84f));
+        TextMeshProUGUI spotifyLabel = CreateLabel("Spotify", handle, "Spotify", 12f, 0f, 4f, 130f, 22f, new Color(0.76f, 0.82f, 0.84f));
 
         statusLabel = CreateLabel("Playback", handle, "Connecting", 11f, 140f, 4f, 164f, 22f, new Color(0.76f, 0.82f, 0.84f));
 
@@ -301,10 +317,26 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         nextButton = CreateButton("Next", "next", 170f, false, "next");
 
-        CreateLabel("Shortcut", panel, "F9 to hide", 11f, 226f, 100f, 94f, 23f, new Color(0.67f, 0.74f, 0.77f));
+        TextMeshProUGUI shortcutLabel = CreateLabel("Shortcut", panel, "F9", 11f, 224f, 130f, 32f, 23f, new Color(0.67f, 0.74f, 0.77f));
+
+        CreateTimeline();
+
+        appearanceLabels = new[] { spotifyLabel, statusLabel, titleLabel, artistLabel, shortcutLabel, elapsedLabel, durationLabel };
+
+        appearanceFontSizes = new[] { 12f, 11f, 18f, 13f, 11f, 11f, 11f };
+
+        CreateTextButton("EditAppearance", panel, "Edit", 266f, 128f, 54f, 28f, ToggleAppearanceMenu);
+
+        CreateAppearanceMenu();
+
+        ApplyAppearance();
+
+        ClampPanel();
+
+        UpdateAppearanceMenu();
 
         // INFO after all UI and event bindings exist; placement matches the requested lower-right area.
-        PanelLog.LogInfo($"[INFO] Spotify.Panel created; version=0.3.0; placement=bottom-right; controls=3; draggable=true; font={panelFont.name}");
+        PanelLog.LogInfo($"[INFO] Spotify.Panel created; version=0.5.0; placement=saved; controls=3; customization=true; font={panelFont.name}");
 
         RefreshLabels();
 
@@ -313,7 +345,7 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
     private Button CreateButton(string name, string shape, float x, bool primary, string command)
     {
-        RectTransform rect = CreateRect(name, panel, 36f, 32f, x, -96f);
+        RectTransform rect = CreateRect(name, panel, 36f, 32f, x, -126f);
 
         Image background = rect.gameObject.AddComponent<Image>();
 
@@ -378,6 +410,13 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         begin.callback.AddListener((UnityAction<BaseEventData>)(data =>
         {
+            if (PositionLocked.Value)
+            {
+                return;
+            }
+
+            dragging = true;
+
             dragStart = data.Cast<PointerEventData>().position;
 
             panelStart = panel.anchoredPosition;
@@ -389,6 +428,11 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         drag.callback.AddListener((UnityAction<BaseEventData>)(data =>
         {
+            if (!dragging || PositionLocked.Value)
+            {
+                return;
+            }
+
             Vector2 current = data.Cast<PointerEventData>().position;
 
             panel.anchoredPosition = panelStart + (current - dragStart) / canvas.scaleFactor;
@@ -402,6 +446,15 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         end.callback.AddListener((UnityAction<BaseEventData>)(data =>
         {
+            if (!dragging || PositionLocked.Value)
+            {
+                dragging = false;
+
+                return;
+            }
+
+            dragging = false;
+
             RightMargin.Value = -panel.anchoredPosition.x;
 
             BottomMargin.Value = panel.anchoredPosition.y;
@@ -421,9 +474,13 @@ public sealed class NowPlayingPanel : MonoBehaviour
 
         Vector2 position = panel.anchoredPosition;
 
-        position.x = Mathf.Clamp(position.x, -Mathf.Max(8f, width - 344f), -8f);
+        float scaledWidth = 336f * panel.localScale.x;
 
-        position.y = Mathf.Clamp(position.y, 8f, Mathf.Max(8f, height - 144f));
+        position.x = Mathf.Clamp(position.x, -Mathf.Max(8f, width - scaledWidth - 8f), -8f);
+
+        float scaledHeight = PlayerHeight * panel.localScale.y;
+
+        position.y = Mathf.Clamp(position.y, 8f, Mathf.Max(8f, height - scaledHeight - 8f));
 
         panel.anchoredPosition = position;
     }
@@ -451,6 +508,8 @@ public sealed class NowPlayingPanel : MonoBehaviour
         nextButton.interactable = ready && snapshot.CanNext;
 
         toggleIcon.sprite = ready && snapshot.PlaybackStatus == "Playing" ? pauseSprite : playSprite;
+
+        RefreshTimeline(snapshot, ready);
 
         string artwork = ready ? snapshot.Artwork : "";
 
@@ -641,6 +700,16 @@ public sealed class NowPlayingPanel : MonoBehaviour
         public bool CanToggle;
 
         public bool CanNext;
+
+        public bool TimelineAvailable;
+
+        public double PositionSeconds;
+
+        public double DurationSeconds;
+
+        public double PlaybackRate = 1.0;
+
+        public readonly long ReceivedAtTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
         public readonly DateTime ReceivedAtUtc = DateTime.UtcNow;
     }

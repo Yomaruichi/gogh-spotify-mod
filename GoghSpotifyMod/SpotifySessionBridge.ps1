@@ -49,7 +49,15 @@ function Write-Snapshot {
         [string] $ArtworkBase64 = '',
         [bool] $CanPrevious = $false,
         [bool] $CanToggle = $false,
-        [bool] $CanNext = $false
+        [bool] $CanNext = $false,
+
+        [bool] $TimelineAvailable = $false,
+
+        [double] $PositionSeconds = 0,
+
+        [double] $DurationSeconds = 0,
+
+        [double] $PlaybackRate = 1
     )
 
     $snapshot = [ordered]@{
@@ -63,6 +71,10 @@ function Write-Snapshot {
         CanPrevious = $CanPrevious
         CanToggle = $CanToggle
         CanNext = $CanNext
+        TimelineAvailable = $TimelineAvailable
+        PositionSeconds = $PositionSeconds
+        DurationSeconds = $DurationSeconds
+        PlaybackRate = $PlaybackRate
         UpdatedAtUtc = [DateTime]::UtcNow.ToString('o')
     }
 
@@ -106,6 +118,72 @@ function Get-SpotifyArtwork {
     }
 }
 
+function Get-SpotifyTimeline {
+    param($Session, $PlaybackInfo)
+
+    try {
+        $timeline = $Session.GetTimelineProperties()
+
+        $duration = ($timeline.EndTime - $timeline.StartTime).TotalSeconds
+
+        $position = ($timeline.Position - $timeline.StartTime).TotalSeconds
+
+        $rate = 1.0
+
+        if ($null -ne $PlaybackInfo.PlaybackRate -and $PlaybackInfo.PlaybackRate -gt 0) {
+            $rate = [double] $PlaybackInfo.PlaybackRate
+        }
+
+        if ([double]::IsNaN($rate) -or [double]::IsInfinity($rate) -or $rate -le 0) {
+            $rate = 1.0
+        }
+
+        $available = $duration -gt 0 -and
+            -not [double]::IsNaN($duration) -and
+            -not [double]::IsInfinity($duration) -and
+            -not [double]::IsNaN($position) -and
+            -not [double]::IsInfinity($position)
+
+        if (-not $available) {
+            $duration = 0.0
+
+            $position = 0.0
+        }
+
+        $script:lastTimelineError = ''
+
+        if ($available -and $PlaybackInfo.PlaybackStatus.ToString() -eq 'Playing') {
+            $updatedAt = [DateTimeOffset] $timeline.LastUpdatedTime
+
+            $age = [Math]::Max(0, ([DateTimeOffset]::UtcNow - $updatedAt).TotalSeconds)
+
+            $position += $age * $rate
+        }
+
+        return [pscustomobject]@{
+            Available = $available
+            PositionSeconds = [Math]::Max(0, [Math]::Min($duration, $position))
+            DurationSeconds = [Math]::Max(0, $duration)
+            PlaybackRate = $rate
+        }
+    } catch {
+        $errorCode = $_.Exception.GetType().Name + ':' + $_.Exception.HResult
+
+        if ($errorCode -ne $script:lastTimelineError) {
+            # WARN only for a new optional timeline failure; metadata/controls continue with unknown time.
+            Write-BridgeLog "[WARN] Spotify.Timeline unavailable; code=$errorCode; nextAction=show unknown time"
+        }
+
+        $script:lastTimelineError = $errorCode
+
+        return [pscustomobject]@{
+            Available = $false
+            PositionSeconds = 0.0
+            DurationSeconds = 0.0
+            PlaybackRate = 1.0
+        }
+    }
+}
 function Invoke-SpotifyCommand {
     param($Session, [string] $Command)
 
@@ -306,9 +384,15 @@ public static class SpotifyCommandInput
                     $artworkKey = $newArtworkKey
                 }
 
-                $controls = $spotifySession.GetPlaybackInfo().Controls
+                $playbackInfo = $spotifySession.GetPlaybackInfo()
 
-                Write-Snapshot -Status 'Ready' -Title $properties.Title -Artist $properties.Artist -Album $properties.AlbumTitle -PlaybackStatus $playbackStatus -ArtworkBase64 $artworkBase64 -CanPrevious $controls.IsPreviousEnabled -CanToggle $controls.IsPlayPauseToggleEnabled -CanNext $controls.IsNextEnabled
+                $controls = $playbackInfo.Controls
+
+                $timeline = Get-SpotifyTimeline -Session $spotifySession -PlaybackInfo $playbackInfo
+
+                $playbackStatus = $playbackInfo.PlaybackStatus.ToString()
+
+                Write-Snapshot -Status 'Ready' -Title $properties.Title -Artist $properties.Artist -Album $properties.AlbumTitle -PlaybackStatus $playbackStatus -ArtworkBase64 $artworkBase64 -CanPrevious $controls.IsPreviousEnabled -CanToggle $controls.IsPlayPauseToggleEnabled -CanNext $controls.IsNextEnabled -TimelineAvailable $timeline.Available -PositionSeconds $timeline.PositionSeconds -DurationSeconds $timeline.DurationSeconds -PlaybackRate $timeline.PlaybackRate
             }
 
             if ($previousError -ne '') {

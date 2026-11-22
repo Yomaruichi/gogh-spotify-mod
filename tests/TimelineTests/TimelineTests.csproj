@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RestoreSources>$(MSBuildThisFileDirectory)</RestoreSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\GoghSpotifyMod\PlaybackTimeline.cs" Link="PlaybackTimeline.cs" />
+  </ItemGroup>
+</Project>

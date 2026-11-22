@@ -14,7 +14,7 @@ using BepInEx.Unity.IL2CPP;
 
 namespace GoghSpotifyMod;
 
-[BepInPlugin("jd.gogh.spotify", "Gogh Spotify Mod", "0.3.0")]
+[BepInPlugin("jd.gogh.spotify", "Gogh Spotify Mod", "0.5.0")]
 [BepInProcess("gogh.exe")]
 public sealed class Plugin : BasePlugin
 {
@@ -29,7 +29,7 @@ public sealed class Plugin : BasePlugin
     public override void Load()
     {
         // INFO on plugin entry; version identifies this now-playing panel build.
-        Log.LogInfo("[INFO] Spotify.Load starting; version=0.3.0");
+        Log.LogInfo("[INFO] Spotify.Load starting; version=0.5.0");
 
         try
         {
@@ -47,6 +47,43 @@ public sealed class Plugin : BasePlugin
                 NowPlayingPanel.RightMargin = Config.Bind("Panel", "RightMargin", 24f, "Distance from the right edge in reference pixels; dragging updates this.");
 
                 NowPlayingPanel.BottomMargin = Config.Bind("Panel", "BottomMargin", 88f, "Distance above the bottom edge; leaves room for gogh controls.");
+
+                NowPlayingPanel.PanelScale = Config.Bind(
+                    "Panel",
+                    "Scale",
+                    1f,
+                    new BepInEx.Configuration.ConfigDescription(
+                        "Overall player size. Change this live in Edit.",
+                        new BepInEx.Configuration.AcceptableValueRange<float>(0.75f, 1.5f)
+                    )
+                );
+
+                NowPlayingPanel.BackgroundOpacity = Config.Bind(
+                    "Panel",
+                    "BackgroundOpacity",
+                    0.95f,
+                    new BepInEx.Configuration.ConfigDescription(
+                        "Background opacity; text and controls stay readable.",
+                        new BepInEx.Configuration.AcceptableValueRange<float>(0.35f, 1f)
+                    )
+                );
+
+                NowPlayingPanel.TextScale = Config.Bind(
+                    "Panel",
+                    "TextScale",
+                    1f,
+                    new BepInEx.Configuration.ConfigDescription(
+                        "Text size relative to the player.",
+                        new BepInEx.Configuration.AcceptableValueRange<float>(0.85f, 1.25f)
+                    )
+                );
+
+                NowPlayingPanel.PositionLocked = Config.Bind(
+                    "Panel",
+                    "PositionLocked",
+                    false,
+                    "Prevent dragging the player while keeping playback buttons usable."
+                );
 
                 NowPlayingPanel.SendCommand = SendCommand;
 
@@ -164,7 +201,11 @@ public sealed class Plugin : BasePlugin
                 snapshot.ArtworkBase64,
                 snapshot.CanPrevious,
                 snapshot.CanToggle,
-                snapshot.CanNext
+                snapshot.CanNext,
+                snapshot.TimelineAvailable,
+                snapshot.PositionSeconds,
+                snapshot.DurationSeconds,
+                snapshot.PlaybackRate
             );
 
             string state = JsonSerializer.Serialize(new
@@ -354,5 +395,13 @@ public sealed class Plugin : BasePlugin
         public bool CanToggle { get; set; }
 
         public bool CanNext { get; set; }
+
+        public bool TimelineAvailable { get; set; }
+
+        public double PositionSeconds { get; set; }
+
+        public double DurationSeconds { get; set; }
+
+        public double PlaybackRate { get; set; } = 1.0;
     }
 }
